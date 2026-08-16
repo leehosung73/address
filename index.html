@@ -1,0 +1,320 @@
+<!DOCTYPE html>
+<html lang="ko">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>주소록 관리 (Firebase 연동)</title>
+  <style>
+    * {
+      box-sizing: border-box;
+      margin: 0;
+      padding: 0;
+      font-family: 'Pretendard', -apple-system, BlinkMacSystemFont, system-ui, Roboto, sans-serif;
+    }
+
+    body {
+      background-color: #f4f6f9;
+      display: flex;
+      justify-content: center;
+      align-items: center;
+      min-height: 100vh;
+      padding: 20px;
+    }
+
+    .container {
+      background: #ffffff;
+      width: 100%;
+      max-width: 800px;
+      padding: 28px;
+      border-radius: 12px;
+      box-shadow: 0 4px 16px rgba(0, 0, 0, 0.08);
+    }
+
+    h1 {
+      font-size: 1.5rem;
+      color: #1e293b;
+      margin-bottom: 20px;
+      text-align: center;
+    }
+
+    /* 입력 폼 스타일 */
+    .form-grid {
+      display: grid;
+      grid-template-columns: repeat(3, 1fr) auto;
+      gap: 10px;
+      margin-bottom: 24px;
+    }
+
+    .form-group input {
+      width: 100%;
+      padding: 10px 14px;
+      border: 1px solid #cbd5e1;
+      border-radius: 6px;
+      font-size: 0.95rem;
+      outline: none;
+      transition: border-color 0.2s;
+    }
+
+    .form-group input:focus {
+      border-color: #2563eb;
+    }
+
+    .btn-add {
+      background-color: #2563eb;
+      color: white;
+      border: none;
+      padding: 10px 20px;
+      border-radius: 6px;
+      font-size: 0.95rem;
+      font-weight: 600;
+      cursor: pointer;
+      transition: background-color 0.2s;
+    }
+
+    .btn-add:hover {
+      background-color: #1d4ed8;
+    }
+
+    .btn-add:disabled {
+      background-color: #94a3b8;
+      cursor: not-allowed;
+    }
+
+    /* 테이블 스타일 */
+    .table-wrapper {
+      overflow-x: auto;
+    }
+
+    table {
+      width: 100%;
+      border-collapse: collapse;
+      text-align: left;
+    }
+
+    th, td {
+      padding: 12px 14px;
+      border-bottom: 1px solid #e2e8f0;
+      font-size: 0.95rem;
+    }
+
+    th {
+      background-color: #f8fafc;
+      color: #475569;
+      font-weight: 600;
+    }
+
+    tr:hover {
+      background-color: #f8fafc;
+    }
+
+    .td-no {
+      width: 10%;
+      text-align: center;
+    }
+    
+    .td-action {
+      width: 12%;
+      text-align: center;
+    }
+
+    .btn-delete {
+      background-color: #ef4444;
+      color: white;
+      border: none;
+      padding: 6px 12px;
+      border-radius: 4px;
+      font-size: 0.85rem;
+      cursor: pointer;
+      transition: background-color 0.2s;
+    }
+
+    .btn-delete:hover {
+      background-color: #dc2626;
+    }
+
+    .empty-msg {
+      text-align: center;
+      color: #94a3b8;
+      padding: 24px 0;
+    }
+
+    /* 반응형 레이아웃 */
+    @media (max-width: 640px) {
+      .form-grid {
+        grid-template-columns: 1fr;
+      }
+    }
+  </style>
+</head>
+<body>
+
+  <div class="container">
+    <h1>주소록 관리 (Firebase DB)</h1>
+
+    <!-- 입력 폼 -->
+    <form id="addressForm" class="form-grid">
+      <div class="form-group">
+        <input type="text" id="nameInput" placeholder="이름" required>
+      </div>
+      <div class="form-group">
+        <input type="tel" id="phoneInput" placeholder="핸드폰번호 (예: 010-1234-5678)" required>
+      </div>
+      <div class="form-group">
+        <input type="text" id="regionInput" placeholder="지역 (예: 서울, 경기)" required>
+      </div>
+      <button type="submit" id="submitBtn" class="btn-add">등록</button>
+    </form>
+
+    <!-- 주소록 테이블 -->
+    <div class="table-wrapper">
+      <table>
+        <thead>
+          <tr>
+            <th class="td-no">NO</th>
+            <th>이름</th>
+            <th>핸드폰번호</th>
+            <th>지역</th>
+            <th class="td-action">관리</th>
+          </tr>
+        </thead>
+        <tbody id="addressTableBody">
+          <tr>
+            <td colspan="5" class="empty-msg">데이터를 불러오는 중입니다...</td>
+          </tr>
+        </tbody>
+      </table>
+    </div>
+  </div>
+
+  <!-- Firebase SDK 모듈 로드 -->
+  <script type="module">
+    import { initializeApp } from "https://www.gstatic.com/firebasejs/10.8.0/firebase-app.js";
+    import { getDatabase, ref, push, onValue, remove } from "https://www.gstatic.com/firebasejs/10.8.0/firebase-database.js";
+
+    // Firebase 환경 설정
+    const firebaseConfig = {
+      apiKey: "AIzaSyCNkcV7oAO4li4ZyBvyOjGAWpuAHrLHxQU",
+      authDomain: "address-ef7d6.firebaseapp.com",
+      databaseURL: "https://address-ef7d6-default-rtdb.firebaseio.com",
+      projectId: "address-ef7d6",
+      storageBucket: "address-ef7d6.firebasestorage.app",
+      messagingSenderId: "22857849985",
+      appId: "1:22857849985:web:aadf05798406d7aa4f8180",
+      measurementId: "G-6NMF0F08B5"
+    };
+
+    // Firebase 초기화
+    const app = initializeApp(firebaseConfig);
+    const database = getDatabase(app);
+    const addressesRef = ref(database, 'addresses');
+
+    // DOM 요소
+    const addressForm = document.getElementById('addressForm');
+    const nameInput = document.getElementById('nameInput');
+    const phoneInput = document.getElementById('phoneInput');
+    const regionInput = document.getElementById('regionInput');
+    const addressTableBody = document.getElementById('addressTableBody');
+    const submitBtn = document.getElementById('submitBtn');
+
+    // 1. Firebase 데이터 실시간 동기화 (조회)
+    onValue(addressesRef, (snapshot) => {
+      const data = snapshot.val();
+      addressTableBody.innerHTML = '';
+
+      if (!data) {
+        addressTableBody.innerHTML = `
+          <tr>
+            <td colspan="5" class="empty-msg">등록된 주소록이 없습니다.</td>
+          </tr>
+        `;
+        return;
+      }
+
+      let index = 1;
+      // 객체 형태의 Realtime DB 데이터를 순회
+      for (const key in data) {
+        const item = data[key];
+        const tr = document.createElement('tr');
+        
+        tr.innerHTML = `
+          <td class="td-no">${index++}</td>
+          <td>${escapeHtml(item.name)}</td>
+          <td>${escapeHtml(item.phone)}</td>
+          <td>${escapeHtml(item.region)}</td>
+          <td class="td-action">
+            <button class="btn-delete" data-key="${key}">삭제</button>
+          </td>
+        `;
+
+        // 삭제 버튼 이벤트 리스너 추가
+        tr.querySelector('.btn-delete').addEventListener('click', () => {
+          deleteAddress(key);
+        });
+
+        addressTableBody.appendChild(tr);
+      }
+    });
+
+    // 2. Firebase 데이터 추가
+    addressForm.addEventListener('submit', async (e) => {
+      e.preventDefault();
+
+      const name = nameInput.value.trim();
+      const phone = phoneInput.value.trim();
+      const region = regionInput.value.trim();
+
+      if (!name || !phone || !region) {
+        alert('모든 항목을 입력해주세요.');
+        return;
+      }
+
+      try {
+        submitBtn.disabled = true;
+        
+        // Firebase Realtime DB에 새 객체 추가 (push)
+        await push(addressesRef, {
+          name: name,
+          phone: phone,
+          region: region,
+          createdAt: Date.now()
+        });
+
+        // 입력창 초기화
+        nameInput.value = '';
+        phoneInput.value = '';
+        regionInput.value = '';
+        nameInput.focus();
+      } catch (error) {
+        console.error("데이터 저장 실패:", error);
+        alert("데이터 저장 중 오류가 발생했습니다.");
+      } finally {
+        submitBtn.disabled = false;
+      }
+    });
+
+    // 3. Firebase 데이터 삭제
+    async function deleteAddress(key) {
+      if (confirm('정말 삭제하시겠습니까?')) {
+        try {
+          const itemRef = ref(database, `addresses/${key}`);
+          await remove(itemRef);
+        } catch (error) {
+          console.error("데이터 삭제 실패:", error);
+          alert("삭제 중 오류가 발생했습니다.");
+        }
+      }
+    }
+
+    // XSS 방지용 문자열 이스케이프 함수
+    function escapeHtml(str) {
+      if (!str) return '';
+      return str
+        .replace(/&/g, "&amp;")
+        .replace(/</g, "&lt;")
+        .replace(/>/g, "&gt;")
+        .replace(/"/g, "&quot;")
+        .replace(/'/g, "&#039;");
+    }
+  </script>
+</body>
+</html>
